@@ -32,7 +32,7 @@ int main(){
         return 1;
     }
 
-    int ifindex=if_nametoindex("enp48s0");
+    int ifindex=if_nametoindex("wlp0s20f3");
 
     if(bpf_program__attach_xdp(
         skel->progs.xdp_attach,
@@ -49,12 +49,15 @@ int main(){
     val=calloc(numcpus,sizeof(uint64_t));
     
     if(!val)goto cleanup;
-    
+    struct ip_port_state_key key;
+    struct ip_port_state_key next_key;
+    int has_key=0;
     while (running)
     {
-        struct ip_port_state_key key;
-        struct ip_port_state_key next_key;
-        while(bpf_map_get_next_key(map_fd,&key,&next_key)==0){
+        has_key=0;
+        while(bpf_map_get_next_key(map_fd,(has_key==0?NULL:&key),&next_key)==0){
+            key=next_key;
+            has_key=1;
             if(bpf_map_lookup_elem(map_fd,&key,val)==0){
                 uint64_t sum=0;
                 for(int i=0;i<numcpus;i++){
@@ -68,9 +71,8 @@ int main(){
                    key.proto,
                    sum);
             }
-            key=next_key;
         }
-        printf("-----------");
+        printf("-----------\n");
         sleep(2);
     }
 cleanup:
