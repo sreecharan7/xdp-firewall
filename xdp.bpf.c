@@ -15,6 +15,12 @@ struct ip_port_state_key{
     u32 status;
 };
 
+struct ip_proto_block_key{
+    u32 ip;
+    u16 port;
+    u16 proto;
+};
+
 struct{
     __uint(type,BPF_MAP_TYPE_PERCPU_HASH);
     __uint(max_entries,1024);
@@ -22,6 +28,12 @@ struct{
     __type(value,u64);
 } pkt_cnt SEC(".maps");
 
+struct{
+    __uint(type,BPF_MAP_TYPE_HASH);
+    __uint(max_entries,1024);
+    __type(key,struct ip_proto_block_key);
+    __type(value,u64);
+} pkt_block SEC(".maps");
 
 SEC("xdp")
 int xdp_attach(struct xdp_md *ctx){
@@ -57,6 +69,22 @@ int xdp_attach(struct xdp_md *ctx){
 
     key.status=1;
 
+    struct ip_proto_block_key block_key={};
+    block_key.ip=key.ip;
+    // block_key.port=key.port;
+    block_key.port=64;
+    block_key.proto=key.proto;
+
+    bpf_printk("ip=%u port=%u proto=%u\n",
+           (block_key.ip),
+           (block_key.port),
+           block_key.proto);
+
+    
+
+    u64 *block_val=bpf_map_lookup_elem(&pkt_block,&block_key);
+    if(block_val)key.status=0;
+
     u64 *val=bpf_map_lookup_elem(&pkt_cnt,&key);
 
     if(val){
@@ -65,5 +93,9 @@ int xdp_attach(struct xdp_md *ctx){
         u64 one=1;
         bpf_map_update_elem(&pkt_cnt,&key,&one,BPF_ANY);
     }
-    return XDP_PASS;
+    if(key.status==1){
+        return XDP_PASS;
+    }else {
+        return XDP_DROP;
+    }   
 }

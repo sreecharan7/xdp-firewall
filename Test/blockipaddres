@@ -1,0 +1,4 @@
+    block_ip_proto("1.1.1.1",64,"tcp",block_map_fd);
+    block_ip_proto("1.1.1.1",64,"udp",block_map_fd);
+
+    use the above code in xdf-firewall to block ip adress

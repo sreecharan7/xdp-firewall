@@ -20,6 +20,43 @@ struct ip_port_state_key{
     __u32 status;
 };
 
+struct ip_proto_block_key{
+    __u32 ip;
+    __u16 port;
+    __u16 proto;
+};
+
+void fill_key(struct ip_proto_block_key *key,
+    const char *ip,
+    uint16_t port,
+    const char *proto)
+{
+    memset(key, 0, sizeof(*key));
+
+    inet_pton(AF_INET,ip,&key->ip);
+
+    // key->port=htons(port);
+    key->port=(port);
+
+    if(strcmp(proto,"tcp")==0){
+        key->proto=IPPROTO_TCP;
+    }else if(strcmp(proto,"udp")==0){
+        key->proto=IPPROTO_UDP;
+    }
+}
+void block_ip_proto(const char *ip,
+    uint16_t port,
+    const char *proto,
+    int map_fd
+)
+{
+    struct ip_proto_block_key key={};
+    fill_key(&key,ip,port,proto);
+    __u64 init=0;
+    printf("ip=%d port=%d proto=%d\n",key.ip,key.port,key.proto);
+    bpf_map_update_elem(map_fd,&key,&init,BPF_ANY);
+}
+
 int main(){
     signal(SIGINT,signal_handler);
     struct xdp_bpf *skel;
@@ -42,7 +79,13 @@ int main(){
         return 1;
     }
 
+    struct ip_proto_block_key block_key={};
+
+    
+
     int map_fd=bpf_map__fd(skel->maps.pkt_cnt);
+    int block_map_fd=bpf_map__fd(skel->maps.pkt_block);
+
     int numcpus = libbpf_num_possible_cpus();
 
     uint64_t *val;
@@ -65,11 +108,12 @@ int main(){
                 }
                 struct in_addr a;
                 a.s_addr=key.ip;
-                printf("%s:%d proto=%d -> %llu\n",
+                printf("%s:%d proto=%d -> %llu (%d)\n",
                    inet_ntoa(a),
                    key.port,
                    key.proto,
-                   sum);
+                   sum,
+                   key.status);
             }
         }
         printf("-----------\n");
